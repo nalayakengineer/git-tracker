@@ -1,14 +1,23 @@
 {
   "name": "git-tracker",
   "displayName": "git-tracker",
-  "description": "",
+  "description": "Git Tracker is a VS Code extension that automatically tracks your commit history across multiple repositories and pushes the logs to a dedicated Git repository.",
   "version": "0.0.1",
+  "publisher": "Bharat Bhushan",
   "engines": {
     "vscode": "^1.97.0"
   },
-  "categories": [
-    "Other"
-  ],
+  "icon": "logo.png",
+  "categories": ["Source Control"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nalayakengineer/git-tracker",
+    "bugs": {
+      "url": "https://github.com/nalayakengineer/git-tracker/issues"
+    },
+    "homepage": "https://github.com/nalayakengineer/git-tracker/blob/main/README.md"
+  },
+
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
