@@ -2,7 +2,7 @@
   "name": "git-tracker",
   "displayName": "git-tracker",
   "description": "Git Tracker is a VS Code extension that automatically tracks your commit history across multiple repositories and pushes the logs to a dedicated Git repository.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "nalayakengineer",
   "engines": {
     "vscode": "^1.97.0"
@@ -17,7 +17,6 @@
     },
     "homepage": "https://github.com/nalayakengineer/git-tracker/blob/main/README.md"
   },
-
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
@@ -45,15 +44,21 @@
                 "type": "boolean",
                 "default": true,
                 "description": "Enable debug logs for Git Tracker"
+            },
+            "gitTracker.worklogPushInterval": {
+              "type": "string",
+              "default": "never",
+              "enum": ["never", "daily", "weekly"],
+              "description": "Interval for pushing worklog to remote repository"
             }
         }
     }
   },
   "scripts": {
-    "vscode:prepublish": "pnpm run compile",
+    "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "pnpm run compile && pnpm run lint",
+    "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
   },

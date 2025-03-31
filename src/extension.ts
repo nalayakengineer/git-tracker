@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import simpleGit , { SimpleGit } from 'simple-git';
 import * as fs from 'fs';
 import * as path from 'path';
-import { debug } from 'console';
+
 
 // Enable debug logs
 const debugEnabled = vscode.workspace.getConfiguration('git-tracker').get<boolean>('enableDebug');
@@ -13,6 +13,34 @@ function debugLog(message: string) {
     }
 }
 
+let pushInterval: NodeJS.Timeout | null = null;
+let pushTimeout: NodeJS.Timeout | null = null;
+
+
+function schedulePush (interval : string, worklogRepoPath: string, worklogGit: SimpleGit, worklogRemoteRepo: string) {
+      // Clear existing intervals/timeouts
+    if (pushInterval) {
+        clearInterval(pushInterval);
+        pushInterval = null;
+    }
+    if (pushTimeout) {
+        clearTimeout(pushTimeout);
+        pushTimeout = null;
+    }
+
+    if (interval === "hourly") {
+        pushInterval = setInterval(() => trackCommits(worklogRepoPath, worklogGit, worklogRemoteRepo), 60 * 60 * 1000); // Every hour
+      } else if (interval === "daily") {
+        pushTimeout = setTimeout(function run() {
+            trackCommits(worklogRepoPath, worklogGit, worklogRemoteRepo);
+          pushTimeout = setTimeout(run, 24 * 60 * 60 * 1000); // Every 24 hours
+        }, 24 * 60 * 60 * 1000);
+      }
+
+}
+
+
+
 // Track commits in your provided workspace
 async function trackCommits(worklogRepoPath: string, worklogGit: SimpleGit, worklogRemoteRepo: string) {
     try {
@@ -21,17 +49,12 @@ async function trackCommits(worklogRepoPath: string, worklogGit: SimpleGit, work
             vscode.window.showErrorMessage("No workspace folder found.");
             return;
         }
-
         const workspacePath = workspaceFolders[0].uri.fsPath;
         debugLog(`Tracking commits for workspace: ${workspacePath}`);
-
         const git = simpleGit(workspacePath);
-
         // Fetch commit history
         const log = await git.log({ maxCount: 20 }); // Fetch last 20 commits
-
         debugLog(`Fetched ${log.all.length} commits`);
-
         const commits = log.all.map(commit => ({
             hash: commit.hash,
             message: commit.message,
@@ -39,7 +62,6 @@ async function trackCommits(worklogRepoPath: string, worklogGit: SimpleGit, work
             date: commit.date,
             repository: workspacePath
         }));
-
         if (commits.length > 0) {
             debugLog(`Saving ${commits.length} new commits.`);
             await saveAndPushWorklog(commits, worklogRepoPath, worklogGit, worklogRemoteRepo);
@@ -47,7 +69,6 @@ async function trackCommits(worklogRepoPath: string, worklogGit: SimpleGit, work
             debugLog("No new commits found.");
             vscode.window.showInformationMessage("No new commits to track.");
         }
-
     } catch (error) {
         vscode.window.showErrorMessage(`Error tracking commits: ${error}`);
         debugLog(`Error tracking commits: ${error}`);
@@ -61,10 +82,8 @@ async function saveAndPushWorklog(newCommits: any[], worklogRepoPath: string, wo
         if (!fs.existsSync(worklogRepoPath)) {
             await worklogGit.clone(worklogRemoteRepo, worklogRepoPath);
         }
-
         const worklogFilePath = path.join(worklogRepoPath, '.git_worklog.json');
         let existingCommits: any[] = [];
-
         if (fs.existsSync(worklogFilePath)) {
             try {
                 const fileData = fs.readFileSync(worklogFilePath, 'utf-8');
@@ -73,18 +92,14 @@ async function saveAndPushWorklog(newCommits: any[], worklogRepoPath: string, wo
                 vscode.window.showWarningMessage('Could not read existing worklog file, starting fresh.');
             }
         }
-
         // Append only unique commits
         const updatedCommits = [...existingCommits];
-
         newCommits.forEach(commit => {
             if (!existingCommits.some(existing => existing.hash === commit.hash)) {
                 updatedCommits.push(commit);
             }
         });
-
         fs.writeFileSync(worklogFilePath, JSON.stringify(updatedCommits, null, 2));
-
         // Commit and push
         await worklogGit.add(worklogFilePath);
         debugLog(`Committed ${worklogFilePath}`);
@@ -96,21 +111,28 @@ async function saveAndPushWorklog(newCommits: any[], worklogRepoPath: string, wo
         vscode.window.showErrorMessage(`Failed to push worklog: ${error}`);
     }
 }
+
+
 export function activate(context: vscode.ExtensionContext) {
     const config = vscode.workspace.getConfiguration("gitWorklog");
-
+    const intervalSetting = config.get<string>("worklogPushInterval", "never");
     // Read user-configured values
     const worklogRepoPath = config.get<string>("repoPath")!.replace("${home}", process.env.HOME || process.env.USERPROFILE || "");
     const worklogRemoteRepo = config.get<string>("remoteRepo")!;
-
     // Initialize Git with the custom path
     const worklogGit = simpleGit(worklogRepoPath);
-
     let disposable = vscode.commands.registerCommand('gitWorklog.sync', async () => {
         await trackCommits(worklogRepoPath, worklogGit, worklogRemoteRepo);
     });
-
     context.subscriptions.push(disposable);
+
+    let intervalDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
+        if(event.affectsConfiguration("gitTracker.worklogPushInterval")) {
+            const newInterval = vscode.workspace.getConfiguration("gitTracker").get<string>("worklogPushInterval", "never");
+            schedulePush(newInterval, worklogRepoPath, worklogGit, worklogRemoteRepo);
+        }
+    });
+    context.subscriptions.push(intervalDisposable);
 }
 
 export function deactivate() {}
